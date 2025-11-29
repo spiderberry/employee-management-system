@@ -1,23 +1,26 @@
 package com.group13.EmployeeManager.entity;
 
 import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 
 @Entity
 public class Job {
 
     @Id
-    private int id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
     private String title;
 
     public Job() {}
 
-    public Job(int id, String title) {
+    public Job(Long id, String title) {
         this.id = id;
         this.title = title;
     }
 
-    public int getId() {
+    public Long getId() {
         return this.id;
     }
 
