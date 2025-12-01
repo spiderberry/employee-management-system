@@ -21,7 +21,8 @@ public class Employee {
     @ManyToOne
     @JoinColumn(name = "division_id")
     private Division division;
-    @OneToOne(cascade = CascadeType.ALL)
+    @OneToOne
+    @JoinColumn(name = "payroll_id")
     private Payroll payroll;
 
     public Employee() {}

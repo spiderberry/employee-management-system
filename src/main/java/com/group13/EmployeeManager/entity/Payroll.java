@@ -17,6 +17,9 @@ public class Payroll {
     private double fedTax;
     private double fedMedical;
     private double fedSocialSecurity;
+    @OneToOne
+    @JoinColumn(name = "employee_id")
+    private Employee employee;
 
     public Payroll() {}
 
