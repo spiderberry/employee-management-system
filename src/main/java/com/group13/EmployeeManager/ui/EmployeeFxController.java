@@ -10,6 +10,7 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
+import javafx.scene.control.TextArea;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
@@ -67,6 +68,10 @@ public class EmployeeFxController {
     private DatePicker hireDatePicker;
     @FXML
     private Label statusLabel;
+    @FXML
+    private ComboBox<ReportType> reportSelector;
+    @FXML
+    private TextArea reportOutput;
 
     public EmployeeFxController(EmployeeService employeeService) {
         this.employeeService = employeeService;
@@ -76,6 +81,10 @@ public class EmployeeFxController {
     public void initialize() {
         searchModeBox.getItems().setAll(SearchMode.values());
         searchModeBox.getSelectionModel().select(SearchMode.NAME);
+        if (reportSelector != null) {
+            reportSelector.getItems().setAll(ReportType.values());
+            reportSelector.getSelectionModel().select(ReportType.FULL_EMPLOYEE_PAY);
+        }
 
         idColumn.setCellValueFactory(cell -> new SimpleObjectProperty<>(cell.getValue().getId()));
         nameColumn.setCellValueFactory(cell -> new SimpleObjectProperty<>(cell.getValue().getName()));
@@ -224,6 +233,22 @@ public class EmployeeFxController {
         refreshTable();
     }
 
+    @FXML
+    private void handleRunReport() {
+        if (reportSelector == null || reportOutput == null) {
+            return;
+        }
+        ReportType type = Optional.ofNullable(reportSelector.getValue()).orElse(ReportType.FULL_EMPLOYEE_PAY);
+        List<Employee> all = employeeService.findAllEmployees();
+        String result = switch (type) {
+            case FULL_EMPLOYEE_PAY -> buildFullEmployeePayReport(all);
+            case TOTAL_PAY_BY_JOB -> buildTotalPayByJobReport(all);
+            case TOTAL_PAY_BY_DIVISION -> buildTotalPayByDivisionReport(all);
+        };
+        reportOutput.setText(result);
+        statusLabel.setText("Report generated: " + type.label);
+    }
+
     private void refreshTable() {
         employees.setAll(employeeService.findAllEmployees());
         statusLabel.setText("Loaded " + employees.size() + " employees.");
@@ -358,6 +383,62 @@ public class EmployeeFxController {
         }
     }
 
+    private String buildFullEmployeePayReport(List<Employee> employees) {
+        StringBuilder sb = new StringBuilder();
+        for (Employee e : employees) {
+            sb.append("Employee #").append(e.getId() == null ? "?" : e.getId())
+                    .append(" - ").append(defaultString(e.getName()))
+                    .append(" | Job: ").append(e.getJobTitle() != null ? e.getJobTitle().getTitle() : "N/A")
+                    .append(" | Division: ").append(e.getDivision() != null ? e.getDivision().getName() : "N/A")
+                    .append(" | Salary: ").append(e.getSalary())
+                    .append(" | Hire Date: ").append(e.getHireDate())
+                    .append("\n");
+            if (e.getPayroll() != null) {
+                var p = e.getPayroll();
+                sb.append("   Payroll ID ").append(p.getPayId())
+                        .append(" | Pay Date: ").append(p.getPayDate())
+                        .append(" | Earnings: ").append(p.getEarnings())
+                        .append(" | State Tax: ").append(p.getStateTax())
+                        .append(" | 401k: ").append(p.getRetire401k())
+                        .append(" | Health: ").append(p.getHealthCare())
+                        .append(" | Fed Tax: ").append(p.getFedTax())
+                        .append(" | Fed Medical: ").append(p.getFedMedical())
+                        .append(" | Fed SS: ").append(p.getFedSocialSecurity())
+                        .append("\n");
+            } else {
+                sb.append("   No payroll data available\n");
+            }
+            sb.append("\n");
+        }
+        return sb.toString();
+    }
+
+    private String buildTotalPayByJobReport(List<Employee> employees) {
+        var totals = new java.util.LinkedHashMap<String, Double>();
+        for (Employee e : employees) {
+            String key = e.getJobTitle() != null ? e.getJobTitle().getTitle() : "Unassigned";
+            totals.put(key, totals.getOrDefault(key, 0.0) + e.getPayForMonthByJob());
+        }
+        StringBuilder sb = new StringBuilder("Total pay for month by job title:\n");
+        totals.forEach((job, total) -> sb.append(" - ").append(job).append(": ").append(total).append("\n"));
+        return sb.toString();
+    }
+
+    private String buildTotalPayByDivisionReport(List<Employee> employees) {
+        var totals = new java.util.LinkedHashMap<String, Double>();
+        for (Employee e : employees) {
+            String key = e.getDivision() != null ? e.getDivision().getName() : "Unassigned";
+            totals.put(key, totals.getOrDefault(key, 0.0) + e.getPayForMonthByDivision());
+        }
+        StringBuilder sb = new StringBuilder("Total pay for month by division:\n");
+        totals.forEach((division, total) -> sb.append(" - ").append(division).append(": ").append(total).append("\n"));
+        return sb.toString();
+    }
+
+    private String defaultString(String value) {
+        return value != null ? value : "";
+    }
+
     private static class FormData {
         String jobTitle;
         String divisionName;
@@ -380,6 +461,23 @@ public class EmployeeFxController {
         private final String label;
 
         SearchMode(String label) {
+            this.label = label;
+        }
+
+        @Override
+        public String toString() {
+            return label;
+        }
+    }
+
+    public enum ReportType {
+        FULL_EMPLOYEE_PAY("Full-time employee information with pay statement history"),
+        TOTAL_PAY_BY_JOB("Total pay for month by job title"),
+        TOTAL_PAY_BY_DIVISION("Total pay for month by division");
+
+        private final String label;
+
+        ReportType(String label) {
             this.label = label;
         }
 
