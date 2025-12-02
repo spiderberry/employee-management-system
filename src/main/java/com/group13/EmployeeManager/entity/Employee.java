@@ -129,7 +129,7 @@ public class Employee {
 
     @Transient
     public double getTotalPayForMonthByDivision() {
-        Long divId = this.jobTitle.getId();
+        Long divId = this.division.getId();
         if (divId > 0 && divId < 5) {
             return salary + (salary * 0.04);
         } else if (divId > 5 && divId < 10) {
