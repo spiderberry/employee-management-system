@@ -44,6 +44,10 @@ public class EmployeeFxController {
     private TableColumn<Employee, LocalDate> hireDateColumn;
     @FXML
     private TableColumn<Employee, Double> salaryColumn;
+    @FXML
+    private TableColumn<Employee, String> jobColumn;
+    @FXML
+    private TableColumn<Employee, String> divisionColumn;
 
     @FXML
     private TextField idField;
@@ -55,6 +59,10 @@ public class EmployeeFxController {
     private TextField ssnField;
     @FXML
     private TextField salaryField;
+    @FXML
+    private TextField jobField;
+    @FXML
+    private TextField divisionField;
     @FXML
     private DatePicker hireDatePicker;
     @FXML
@@ -75,6 +83,14 @@ public class EmployeeFxController {
         ssnColumn.setCellValueFactory(cell -> new SimpleObjectProperty<>(cell.getValue().getSocialSecurityNumber()));
         hireDateColumn.setCellValueFactory(cell -> new SimpleObjectProperty<>(cell.getValue().getHireDate()));
         salaryColumn.setCellValueFactory(cell -> new SimpleObjectProperty<>(cell.getValue().getSalary()));
+        jobColumn.setCellValueFactory(cell -> {
+            var job = cell.getValue().getJobTitle();
+            return new SimpleObjectProperty<>(job != null ? job.getTitle() : "");
+        });
+        divisionColumn.setCellValueFactory(cell -> {
+            var division = cell.getValue().getDivision();
+            return new SimpleObjectProperty<>(division != null ? division.getName() : "");
+        });
 
         employeeTable.setItems(employees);
         employeeTable.getSelectionModel().selectedItemProperty().addListener((obs, oldSelection, newSelection) -> populateForm(newSelection));
@@ -138,8 +154,9 @@ public class EmployeeFxController {
     private void handleAdd() {
         try {
             Employee employee = new Employee();
-            applyForm(employee);
+            FormData formData = applyForm(employee);
             Employee saved = employeeService.updateEmployee(employee);
+            applyJobAndDivision(saved, formData);
             refreshTable();
             selectEmployee(saved.getId());
             statusLabel.setText("Added employee #" + saved.getId());
@@ -158,8 +175,9 @@ public class EmployeeFxController {
         }
 
         try {
-            applyForm(current);
+            FormData formData = applyForm(current);
             Employee saved = employeeService.updateEmployee(current);
+            applyJobAndDivision(saved, formData);
             refreshTable();
             selectEmployee(saved.getId());
             statusLabel.setText("Updated employee #" + saved.getId());
@@ -223,6 +241,8 @@ public class EmployeeFxController {
         ssnField.setText(employee.getSocialSecurityNumber());
         salaryField.setText(employee.getSalary() == 0 ? "" : Double.toString(employee.getSalary()));
         hireDatePicker.setValue(employee.getHireDate());
+        jobField.setText(employee.getJobTitle() != null ? employee.getJobTitle().getTitle() : "");
+        divisionField.setText(employee.getDivision() != null ? employee.getDivision().getName() : "");
     }
 
     private void clearForm() {
@@ -232,10 +252,12 @@ public class EmployeeFxController {
         ssnField.clear();
         salaryField.clear();
         hireDatePicker.setValue(null);
+        jobField.clear();
+        divisionField.clear();
         employeeTable.getSelectionModel().clearSelection();
     }
 
-    private void applyForm(Employee employee) {
+    private FormData applyForm(Employee employee) {
         String name = nameField.getText() != null ? nameField.getText().trim() : "";
         if (name.isBlank()) {
             throw new IllegalArgumentException("Name is required.");
@@ -257,6 +279,16 @@ public class EmployeeFxController {
         }
 
         employee.setHireDate(hireDatePicker.getValue());
+
+        FormData formData = new FormData();
+        formData.jobTitle = jobField.getText() != null && !jobField.getText().trim().isEmpty()
+                ? jobField.getText().trim()
+                : null;
+        formData.divisionName = divisionField.getText() != null && !divisionField.getText().trim().isEmpty()
+                ? divisionField.getText().trim()
+                : null;
+        formData.hireDate = employee.getHireDate();
+        return formData;
     }
 
     private Employee resolveEmployeeForUpdate() {
@@ -307,6 +339,29 @@ public class EmployeeFxController {
         alert.setHeaderText(null);
         alert.setContentText(message);
         alert.showAndWait();
+    }
+
+    private void applyJobAndDivision(Employee employee, FormData formData) {
+        boolean hireDateNeedsRestore = formData.hireDate != null;
+
+        if (formData.jobTitle != null) {
+            employeeService.assignJobToEmployee(employee, formData.jobTitle);
+            hireDateNeedsRestore = true; // assign method overrides hire date
+        }
+        if (formData.divisionName != null) {
+            employeeService.assignDivisionToEmployee(employee, formData.divisionName);
+        }
+
+        if (hireDateNeedsRestore) {
+            employee.setHireDate(formData.hireDate);
+            employeeService.updateEmployee(employee);
+        }
+    }
+
+    private static class FormData {
+        String jobTitle;
+        String divisionName;
+        LocalDate hireDate;
     }
 
     private void showInfo(String title, String message) {

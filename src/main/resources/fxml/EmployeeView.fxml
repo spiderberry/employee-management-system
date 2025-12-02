@@ -32,6 +32,8 @@
                     <TableColumn fx:id="ssnColumn" prefWidth="140.0" text="SSN"/>
                     <TableColumn fx:id="salaryColumn" prefWidth="110.0" text="Salary"/>
                     <TableColumn fx:id="hireDateColumn" prefWidth="120.0" text="Hire Date"/>
+                    <TableColumn fx:id="jobColumn" prefWidth="140.0" text="Job Title"/>
+                    <TableColumn fx:id="divisionColumn" prefWidth="140.0" text="Division"/>
                 </columns>
             </TableView>
         </VBox>
@@ -47,6 +49,8 @@
                     <ColumnConstraints hgrow="ALWAYS"/>
                 </columnConstraints>
                 <rowConstraints>
+                    <RowConstraints minHeight="28.0"/>
+                    <RowConstraints minHeight="28.0"/>
                     <RowConstraints minHeight="28.0"/>
                     <RowConstraints minHeight="28.0"/>
                     <RowConstraints minHeight="28.0"/>
@@ -71,6 +75,12 @@
 
                 <Label text="Hire Date:" GridPane.rowIndex="5" GridPane.columnIndex="0"/>
                 <DatePicker fx:id="hireDatePicker" promptText="yyyy-mm-dd" GridPane.rowIndex="5" GridPane.columnIndex="1"/>
+
+                <Label text="Job Title:" GridPane.rowIndex="6" GridPane.columnIndex="0"/>
+                <TextField fx:id="jobField" promptText="Existing job title" GridPane.rowIndex="6" GridPane.columnIndex="1"/>
+
+                <Label text="Division:" GridPane.rowIndex="7" GridPane.columnIndex="0"/>
+                <TextField fx:id="divisionField" promptText="Existing division name" GridPane.rowIndex="7" GridPane.columnIndex="1"/>
             </GridPane>
             <HBox alignment="CENTER_RIGHT" spacing="10.0">
                 <Button text="Add New" onAction="#handleAdd"/>
