@@ -69,7 +69,9 @@ public class EmployeeFxController {
     @FXML
     private TextField maxSalaryRangeField;
     @FXML
-    private TextField percentIncreaseField;
+    private TextField adjustmentValueField;
+    @FXML
+    private ComboBox<AdjustMode> adjustmentModeBox;
     @FXML
     private DatePicker hireDatePicker;
     @FXML
@@ -90,6 +92,10 @@ public class EmployeeFxController {
         if (reportSelector != null) {
             reportSelector.getItems().setAll(ReportType.values());
             reportSelector.getSelectionModel().select(ReportType.FULL_EMPLOYEE_PAY);
+        }
+        if (adjustmentModeBox != null) {
+            adjustmentModeBox.getItems().setAll(AdjustMode.values());
+            adjustmentModeBox.getSelectionModel().select(AdjustMode.PERCENT);
         }
 
         idColumn.setCellValueFactory(cell -> new SimpleObjectProperty<>(cell.getValue().getId()));
@@ -243,9 +249,11 @@ public class EmployeeFxController {
     private void handleApplySalaryIncrease() {
         Double min = parseDouble(minSalaryRangeField, "Minimum salary");
         Double max = parseDouble(maxSalaryRangeField, "Maximum salary");
-        Double percent = parseDouble(percentIncreaseField, "Percent increase");
+        Double value = parseDouble(adjustmentValueField, "Adjustment value");
+        AdjustMode mode = Optional.ofNullable(adjustmentModeBox != null ? adjustmentModeBox.getValue() : AdjustMode.PERCENT)
+                .orElse(AdjustMode.PERCENT);
 
-        if (min == null || max == null || percent == null) {
+        if (min == null || max == null || value == null) {
             return;
         }
         if (min < 0 || max <= 0 || max <= min) {
@@ -258,14 +266,16 @@ public class EmployeeFxController {
         for (Employee e : all) {
             double salary = e.getSalary();
             if (salary >= min && salary < max) {
-                double updatedSalary = salary + (salary * (percent / 100.0));
+                double delta = mode == AdjustMode.PERCENT ? salary * (value / 100.0) : value;
+                double updatedSalary = salary + delta;
                 e.setSalary(updatedSalary);
                 employeeService.updateEmployee(e);
                 updated++;
             }
         }
         refreshTable();
-        statusLabel.setText("Applied " + percent + "% increase to " + updated + " employee(s) in range.");
+        String label = mode == AdjustMode.PERCENT ? value + "% change" : "amount change of " + value;
+        statusLabel.setText("Applied " + label + " to " + updated + " employee(s) in range.");
         if (updated == 0) {
             showInfo("No employees updated", "No employees matched the specified salary range.");
         }
@@ -516,6 +526,22 @@ public class EmployeeFxController {
         private final String label;
 
         SearchMode(String label) {
+            this.label = label;
+        }
+
+        @Override
+        public String toString() {
+            return label;
+        }
+    }
+
+    public enum AdjustMode {
+        PERCENT("Percent"),
+        AMOUNT("Flat Amount");
+
+        private final String label;
+
+        AdjustMode(String label) {
             this.label = label;
         }
 

@@ -103,8 +103,9 @@
                     <HBox spacing="10.0">
                         <TextField fx:id="minSalaryRangeField" promptText="Min salary (e.g. 58000)"/>
                         <TextField fx:id="maxSalaryRangeField" promptText="Max salary (e.g. 105000)"/>
-                        <TextField fx:id="percentIncreaseField" promptText="Increase % (e.g. 3.2)"/>
-                        <Button text="Apply Increase" onAction="#handleApplySalaryIncrease"/>
+                        <ComboBox fx:id="adjustmentModeBox" prefWidth="140.0"/>
+                        <TextField fx:id="adjustmentValueField" promptText="Adjustment value (e.g. 3.2 or -500)"/>
+                        <Button text="Apply" onAction="#handleApplySalaryIncrease"/>
                     </HBox>
                 </VBox>
             </TitledPane>
