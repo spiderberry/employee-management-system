@@ -65,6 +65,12 @@ public class EmployeeFxController {
     @FXML
     private TextField divisionField;
     @FXML
+    private TextField minSalaryRangeField;
+    @FXML
+    private TextField maxSalaryRangeField;
+    @FXML
+    private TextField percentIncreaseField;
+    @FXML
     private DatePicker hireDatePicker;
     @FXML
     private Label statusLabel;
@@ -231,6 +237,38 @@ public class EmployeeFxController {
     private void handleClearSearch() {
         searchInput.clear();
         refreshTable();
+    }
+
+    @FXML
+    private void handleApplySalaryIncrease() {
+        Double min = parseDouble(minSalaryRangeField, "Minimum salary");
+        Double max = parseDouble(maxSalaryRangeField, "Maximum salary");
+        Double percent = parseDouble(percentIncreaseField, "Percent increase");
+
+        if (min == null || max == null || percent == null) {
+            return;
+        }
+        if (min < 0 || max <= 0 || max <= min) {
+            showError("Salary range", "Enter a valid salary range where max is greater than min.");
+            return;
+        }
+
+        List<Employee> all = employeeService.findAllEmployees();
+        int updated = 0;
+        for (Employee e : all) {
+            double salary = e.getSalary();
+            if (salary >= min && salary < max) {
+                double updatedSalary = salary + (salary * (percent / 100.0));
+                e.setSalary(updatedSalary);
+                employeeService.updateEmployee(e);
+                updated++;
+            }
+        }
+        refreshTable();
+        statusLabel.setText("Applied " + percent + "% increase to " + updated + " employee(s) in range.");
+        if (updated == 0) {
+            showInfo("No employees updated", "No employees matched the specified salary range.");
+        }
     }
 
     @FXML
@@ -437,6 +475,23 @@ public class EmployeeFxController {
 
     private String defaultString(String value) {
         return value != null ? value : "";
+    }
+
+    private Double parseDouble(TextField field, String label) {
+        if (field == null) {
+            return null;
+        }
+        String text = field.getText() != null ? field.getText().trim() : "";
+        if (text.isEmpty()) {
+            showError(label, "Please enter " + label.toLowerCase() + ".");
+            return null;
+        }
+        try {
+            return Double.parseDouble(text);
+        } catch (NumberFormatException ex) {
+            showError(label, label + " must be a valid number.");
+            return null;
+        }
     }
 
     private static class FormData {

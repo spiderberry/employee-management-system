@@ -95,7 +95,19 @@
                     </HBox>
                 </VBox>
             </TitledPane>
-            <Label fx:id="statusLabel" text="Ready" style="-fx-text-fill: #444;"/>
+            <TitledPane text="Salary Adjustment" expanded="false">
+                <VBox spacing="8.0">
+                    <padding>
+                        <Insets top="10" right="10" bottom="10" left="10"/>
+                    </padding>
+                    <HBox spacing="10.0">
+                        <TextField fx:id="minSalaryRangeField" promptText="Min salary (e.g. 58000)"/>
+                        <TextField fx:id="maxSalaryRangeField" promptText="Max salary (e.g. 105000)"/>
+                        <TextField fx:id="percentIncreaseField" promptText="Increase % (e.g. 3.2)"/>
+                        <Button text="Apply Increase" onAction="#handleApplySalaryIncrease"/>
+                    </HBox>
+                </VBox>
+            </TitledPane>
             <TitledPane text="Reports" expanded="true">
                 <VBox spacing="8.0">
                     <padding>
@@ -108,6 +120,7 @@
                     <TextArea fx:id="reportOutput" prefRowCount="6" wrapText="true" editable="false" promptText="Report output will appear here"/>
                 </VBox>
             </TitledPane>
+            <Label fx:id="statusLabel" text="Ready" style="-fx-text-fill: #444;"/>
         </VBox>
     </bottom>
 </BorderPane>
