@@ -115,9 +115,33 @@ public class Employee {
         this.socialSecurityNumber = socialSecurityNumber;
     }
 
+    @Transient
+    public double getTotalPayForMonthByJob() {
+        Long jobId = this.jobTitle.getId();
+        if (jobId > 0 && jobId < 5) {
+            return salary + (salary * 0.04);
+        } else if (jobId > 5 && jobId < 10) {
+            return salary + (salary * 0.035);
+        } else {
+            return salary + (salary * 0.03);
+        }
+    }
+
+    @Transient
+    public double getTotalPayForMonthByDivision() {
+        Long divId = this.jobTitle.getId();
+        if (divId > 0 && divId < 5) {
+            return salary + (salary * 0.04);
+        } else if (divId > 5 && divId < 10) {
+            return salary + (salary * 0.035);
+        } else {
+            return salary + (salary * 0.03);
+        }
+    }
+
     @Override
     public String toString() {
-        return "Employee{" +
+        return "Employee Information and Pay Statement History: \n" +
                 "\nid: " + id +
                 "\nname: " + name + '\'' +
                 "\nemail: " + email + '\'' +
@@ -126,7 +150,6 @@ public class Employee {
                 "\nsocialSecurityNumber: " + socialSecurityNumber + '\'' +
                 "\njobTitle: " + jobTitle +
                 "\ndivision: " + division +
-                "\npayroll: " + payroll +
-                '}';
+                "\npayroll: " + payroll;
     }
 }
