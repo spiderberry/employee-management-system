@@ -3,9 +3,6 @@ package com.group13.EmployeeManager.ui;
 import com.group13.EmployeeManager.entity.Employee;
 import com.group13.EmployeeManager.entity.Division;
 import com.group13.EmployeeManager.entity.Job;
-import com.group13.EmployeeManager.service.EmployeeService;
-import com.group13.EmployeeManager.service.DivisionService;
-import com.group13.EmployeeManager.service.JobService;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -18,7 +15,13 @@ import javafx.scene.control.TextArea;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -28,9 +31,9 @@ import java.util.Optional;
 @Component
 public class EmployeeFxController {
 
-    private final EmployeeService employeeService;
-    private final JobService jobService;
-    private final DivisionService divisionService;
+    @Autowired
+    private com.group13.EmployeeManager.controller.EmployeeController employeeController;
+    private RestTemplate restTemplate = new RestTemplate();
     private final ObservableList<Employee> employees = FXCollections.observableArrayList();
 
     @FXML
@@ -87,12 +90,6 @@ public class EmployeeFxController {
     @FXML
     private TextArea reportOutput;
 
-    public EmployeeFxController(EmployeeService employeeService, JobService jobService, DivisionService divisionService) {
-        this.employeeService = employeeService;
-        this.jobService = jobService;
-        this.divisionService = divisionService;
-    }
-
     @FXML
     public void initialize() {
         searchModeBox.getItems().setAll(SearchMode.values());
@@ -107,13 +104,11 @@ public class EmployeeFxController {
         }
         if (jobField != null) {
             jobField.setEditable(true);
-            List<Job> jobs = jobService.findAllJobs();
-            jobField.getItems().setAll(jobs.stream().map(Job::getTitle).toList());
+            jobField.getItems().setAll(fetchJobTitles());
         }
         if (divisionField != null) {
             divisionField.setEditable(true);
-            List<Division> divisions = divisionService.findAllDivisions();
-            divisionField.getItems().setAll(divisions.stream().map(Division::getName).toList());
+            divisionField.getItems().setAll(fetchDivisionNames());
         }
 
         idColumn.setCellValueFactory(cell -> new SimpleObjectProperty<>(cell.getValue().getId()));
@@ -153,17 +148,14 @@ public class EmployeeFxController {
                 case ID -> {
                     Long id = parseId(term);
                     if (id != null) {
-                        results.add(employeeService.findEmployeeById(id));
+                        results.add(employeeController.getEmployeeById(id));
                     }
                 }
                 case NAME -> {
-                    Employee employee = employeeService.findEmployeeByName(term);
-                    if (employee != null) {
-                        results.add(employee);
-                    }
+                    results.addAll(findEmployeesByName(term));
                 }
                 case SSN -> {
-                    Employee employee = employeeService.findEmployeeBySocialSecurityNumber(term);
+                    Employee employee = findEmployeeBySsn(term);
                     if (employee != null) {
                         results.add(employee);
                     }
@@ -194,7 +186,7 @@ public class EmployeeFxController {
         try {
             Employee employee = new Employee();
             FormData formData = applyForm(employee);
-            Employee saved = employeeService.updateEmployee(employee);
+            Employee saved = employeeController.addEmployee(employee);
             applyJobAndDivision(saved, formData);
             refreshTable();
             selectEmployee(saved.getId());
@@ -215,7 +207,7 @@ public class EmployeeFxController {
 
         try {
             FormData formData = applyForm(current);
-            Employee saved = employeeService.updateEmployee(current);
+            Employee saved = employeeController.updateEmployee(current);
             applyJobAndDivision(saved, formData);
             refreshTable();
             selectEmployee(saved.getId());
@@ -243,7 +235,7 @@ public class EmployeeFxController {
         }
 
         try {
-            employeeService.deleteEmployee(id);
+            employeeController.deleteEmployee(id);
             refreshTable();
             clearForm();
             statusLabel.setText("Deleted employee #" + id);
@@ -279,7 +271,7 @@ public class EmployeeFxController {
             return;
         }
 
-        List<Employee> all = employeeService.findAllEmployees();
+        List<Employee> all = employeeController.getAllEmployees();
         int updated = 0;
         for (Employee e : all) {
             double salary = e.getSalary();
@@ -287,7 +279,7 @@ public class EmployeeFxController {
                 double delta = mode == AdjustMode.PERCENT ? salary * (value / 100.0) : value;
                 double updatedSalary = salary + delta;
                 e.setSalary(updatedSalary);
-                employeeService.updateEmployee(e);
+                employeeController.updateEmployee(e);
                 updated++;
             }
         }
@@ -305,7 +297,7 @@ public class EmployeeFxController {
             return;
         }
         ReportType type = Optional.ofNullable(reportSelector.getValue()).orElse(ReportType.FULL_EMPLOYEE_PAY);
-        List<Employee> all = employeeService.findAllEmployees();
+        List<Employee> all = employeeController.getAllEmployees();
         String result = switch (type) {
             case FULL_EMPLOYEE_PAY -> buildFullEmployeePayReport(all);
             case TOTAL_PAY_BY_JOB -> buildTotalPayByJobReport(all);
@@ -316,7 +308,7 @@ public class EmployeeFxController {
     }
 
     private void refreshTable() {
-        employees.setAll(employeeService.findAllEmployees());
+        employees.setAll(employeeController.getAllEmployees());
         statusLabel.setText("Loaded " + employees.size() + " employees.");
     }
 
@@ -387,7 +379,7 @@ public class EmployeeFxController {
     private Employee resolveEmployeeForUpdate() {
         Employee selected = employeeTable.getSelectionModel().getSelectedItem();
         if (selected != null) {
-            return employeeService.findEmployeeById(selected.getId());
+            return employeeController.getEmployeeById(selected.getId());
         }
 
         Long id = parseId(idField.getText());
@@ -397,7 +389,7 @@ public class EmployeeFxController {
         }
 
         try {
-            return employeeService.findEmployeeById(id);
+            return employeeController.getEmployeeById(id);
         } catch (RuntimeException ex) {
             showError("Update employee", ex.getMessage());
             return null;
@@ -435,29 +427,25 @@ public class EmployeeFxController {
     }
 
     private void applyJobAndDivision(Employee employee, FormData formData) {
-        boolean hireDateNeedsRestore = formData.hireDate != null;
+        boolean updated = false;
 
         if (formData.jobTitle != null) {
-            Job job = jobService.findJobByTitle(formData.jobTitle);
-            if (job == null) {
-                job = jobService.updateJob(new Job(null, formData.jobTitle));
+            Job job = ensureJob(formData.jobTitle);
+            if (job != null) {
+                employee.setJobTitle(job);
+                updated = true;
             }
-            employeeService.assignJobToEmployee(employee, job.getTitle());
-            hireDateNeedsRestore = true; // assign method overrides hire date
         }
         if (formData.divisionName != null) {
-            Division division = divisionService.findByName(formData.divisionName);
-            if (division == null) {
-                Division newDivision = new Division();
-                newDivision.setName(formData.divisionName);
-                division = divisionService.addDivision(newDivision);
+            Division division = ensureDivision(formData.divisionName);
+            if (division != null) {
+                employee.setDivision(division);
+                updated = true;
             }
-            employeeService.assignDivisionToEmployee(employee, division.getName());
         }
 
-        if (hireDateNeedsRestore) {
-            employee.setHireDate(formData.hireDate);
-            employeeService.updateEmployee(employee);
+        if (updated) {
+            employeeController.updateEmployee(employee);
         }
     }
 
@@ -532,6 +520,105 @@ public class EmployeeFxController {
             showError(label, label + " must be a valid number.");
             return null;
         }
+    }
+
+    private List<Employee> findEmployeesByName(String name) {
+        String normalized = name.toLowerCase();
+        return employeeController.getAllEmployees().stream()
+                .filter(emp -> emp.getName() != null && emp.getName().toLowerCase().contains(normalized))
+                .toList();
+    }
+
+    private Employee findEmployeeBySsn(String ssn) {
+        return employeeController.getAllEmployees().stream()
+                .filter(emp -> ssn.equals(emp.getSocialSecurityNumber()))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private Job ensureJob(String title) {
+        Job existing = fetchJobByTitle(title);
+        if (existing != null) {
+            return existing;
+        }
+        try {
+            Job request = new Job(null, title);
+            return restTemplate.postForObject(apiBase() + "/jobs", request, Job.class);
+        } catch (RestClientException ex) {
+            showError("Job", "Unable to save job: " + ex.getMessage());
+            return null;
+        }
+    }
+
+    private Division ensureDivision(String name) {
+        Division existing = fetchDivisionByName(name);
+        if (existing != null) {
+            return existing;
+        }
+        try {
+            Division request = new Division();
+            request.setName(name);
+            return restTemplate.postForObject(apiBase() + "/divisions", request, Division.class);
+        } catch (RestClientException ex) {
+            showError("Division", "Unable to save division: " + ex.getMessage());
+            return null;
+        }
+    }
+
+    private List<String> fetchJobTitles() {
+        return fetchJobs().stream().map(Job::getTitle).toList();
+    }
+
+    private List<Job> fetchJobs() {
+        try {
+            ResponseEntity<List<Job>> response = restTemplate.exchange(
+                    apiBase() + "/jobs",
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<>() {});
+            return Optional.ofNullable(response.getBody()).orElseGet(List::of);
+        } catch (RestClientException ex) {
+            statusLabel.setText("Unable to load jobs: " + ex.getMessage());
+            return List.of();
+        }
+    }
+
+    private Job fetchJobByTitle(String title) {
+        try {
+            return restTemplate.getForObject(apiBase() + "/jobs/{title}", Job.class, title);
+        } catch (RestClientException ex) {
+            return null;
+        }
+    }
+
+    private List<String> fetchDivisionNames() {
+        return fetchDivisions().stream().map(Division::getName).toList();
+    }
+
+    private List<Division> fetchDivisions() {
+        try {
+            ResponseEntity<List<Division>> response = restTemplate.exchange(
+                    apiBase() + "/divisions",
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<>() {});
+            return Optional.ofNullable(response.getBody()).orElseGet(List::of);
+        } catch (RestClientException ex) {
+            statusLabel.setText("Unable to load divisions: " + ex.getMessage());
+            return List.of();
+        }
+    }
+
+    private Division fetchDivisionByName(String name) {
+        try {
+            return restTemplate.getForObject(apiBase() + "/divisions/{name}", Division.class, name);
+        } catch (RestClientException ex) {
+            return null;
+        }
+    }
+
+    private String apiBase() {
+        return "http://localhost:8080";
     }
 
     private static class FormData {
