@@ -4,6 +4,9 @@ import com.group13.EmployeeManager.entity.Employee;
 import com.group13.EmployeeManager.entity.Division;
 import com.group13.EmployeeManager.entity.Job;
 import com.group13.EmployeeManager.entity.Payroll;
+import com.group13.EmployeeManager.ui.client.BackendClient;
+import com.group13.EmployeeManager.ui.viewmodel.EmployeeReportBuilder;
+import com.group13.EmployeeManager.ui.viewmodel.PayrollFormData;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -17,12 +20,8 @@ import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClientException;
-import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -36,7 +35,9 @@ public class EmployeeFxController {
 
     @Autowired
     private com.group13.EmployeeManager.controller.EmployeeController employeeController;
-    private RestTemplate restTemplate = new RestTemplate();
+    @Autowired
+    private BackendClient backendClient;
+    private final EmployeeReportBuilder reportBuilder = new EmployeeReportBuilder();
     private final ObservableList<Employee> employees = FXCollections.observableArrayList();
 
     @FXML
@@ -294,51 +295,17 @@ public class EmployeeFxController {
             return;
         }
 
-        Map<String, Object> payload = new HashMap<>();
-        payload.put("payDate", payDate);
-        payload.put("earnings", earnings);
-        payload.put("stateTax", stateTax);
-        payload.put("retire401k", retire401k);
-        payload.put("healthCare", healthCare);
-        Map<String, Object> fedInfo = new HashMap<>();
-        fedInfo.put("tax", fedTax);
-        fedInfo.put("medical", fedMedical);
-        fedInfo.put("socialSecurtiy", fedSocial);
-        payload.put("fedInfo", fedInfo);
-        Map<String, Object> employeeRef = new HashMap<>();
-        employeeRef.put("id", employee.getId());
-        payload.put("employee", employeeRef);
+        PayrollFormData payrollFormData = new PayrollFormData();
+        payrollFormData.payDate = payDate;
+        payrollFormData.earnings = earnings;
+        payrollFormData.stateTax = stateTax;
+        payrollFormData.retire401k = retire401k;
+        payrollFormData.healthCare = healthCare;
+        payrollFormData.fedTax = fedTax;
+        payrollFormData.fedMedical = fedMedical;
+        payrollFormData.fedSocial = fedSocial;
 
-        try {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> response = restTemplate.postForObject(apiBase() + "/", payload, Map.class);
-            Long payId = null;
-            if (response != null && response.get("payId") instanceof Number num) {
-                payId = num.longValue();
-            }
-
-            if (payId != null) {
-                Payroll saved = new Payroll();
-                saved.setPayId(payId);
-                saved.setPayDate(payDate);
-                saved.setEarnings(earnings);
-                saved.setStateTax(stateTax);
-                saved.setRetire401k(retire401k);
-                saved.setHealthCare(healthCare);
-                setFieldValue(saved, "fedTax", fedTax);
-                setFieldValue(saved, "fedMedical", fedMedical);
-                setFieldValue(saved, "fedSocialSecurity", fedSocial);
-
-                employee.setPayroll(saved);
-                employeeController.updateEmployee(employee);
-                populatePayrollForm(saved);
-                statusLabel.setText("Saved payroll for employee #" + employee.getId());
-            } else {
-                showError("Payroll", "Saved payroll but could not read returned payId.");
-            }
-        } catch (RestClientException ex) {
-            showError("Payroll", "Unable to save payroll: " + ex.getMessage());
-        }
+        savePayrollForEmployee(employee, payrollFormData);
     }
 
     @FXML
@@ -391,9 +358,9 @@ public class EmployeeFxController {
         ReportType type = Optional.ofNullable(reportSelector.getValue()).orElse(ReportType.FULL_EMPLOYEE_PAY);
         List<Employee> all = employeeController.getAllEmployees();
         String result = switch (type) {
-            case FULL_EMPLOYEE_PAY -> buildFullEmployeePayReport(all);
-            case TOTAL_PAY_BY_JOB -> buildTotalPayByJobReport(all);
-            case TOTAL_PAY_BY_DIVISION -> buildTotalPayByDivisionReport(all);
+            case FULL_EMPLOYEE_PAY -> reportBuilder.fullEmployeePay(all);
+            case TOTAL_PAY_BY_JOB -> reportBuilder.totalPayByJob(all);
+            case TOTAL_PAY_BY_DIVISION -> reportBuilder.totalPayByDivision(all);
         };
         reportOutput.setText(result);
         statusLabel.setText("Report generated: " + type.label);
@@ -419,6 +386,49 @@ public class EmployeeFxController {
         jobField.getEditor().setText(employee.getJobTitle() != null ? employee.getJobTitle().getTitle() : "");
         divisionField.getEditor().setText(employee.getDivision() != null ? employee.getDivision().getName() : "");
         populatePayrollForm(employee.getPayroll());
+    }
+
+    private void savePayrollForEmployee(Employee employee, PayrollFormData payrollFormData) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("payDate", payrollFormData.payDate);
+        payload.put("earnings", payrollFormData.earnings);
+        payload.put("stateTax", payrollFormData.stateTax);
+        payload.put("retire401k", payrollFormData.retire401k);
+        payload.put("healthCare", payrollFormData.healthCare);
+        Map<String, Object> fedInfo = new HashMap<>();
+        fedInfo.put("tax", payrollFormData.fedTax);
+        fedInfo.put("medical", payrollFormData.fedMedical);
+        fedInfo.put("socialSecurtiy", payrollFormData.fedSocial);
+        payload.put("fedInfo", fedInfo);
+        Map<String, Object> employeeRef = new HashMap<>();
+        employeeRef.put("id", employee.getId());
+        payload.put("employee", employeeRef);
+
+        Map<String, Object> response = backendClient.postPayroll(payload);
+        Long payId = null;
+        if (response != null && response.get("payId") instanceof Number num) {
+            payId = num.longValue();
+        }
+
+        if (payId != null) {
+            Payroll saved = new Payroll();
+            saved.setPayId(payId);
+            saved.setPayDate(payrollFormData.payDate);
+            saved.setEarnings(payrollFormData.earnings);
+            saved.setStateTax(payrollFormData.stateTax);
+            saved.setRetire401k(payrollFormData.retire401k);
+            saved.setHealthCare(payrollFormData.healthCare);
+            setFieldValue(saved, "fedTax", payrollFormData.fedTax);
+            setFieldValue(saved, "fedMedical", payrollFormData.fedMedical);
+            setFieldValue(saved, "fedSocialSecurity", payrollFormData.fedSocial);
+
+            employee.setPayroll(saved);
+            employeeController.updateEmployee(employee);
+            populatePayrollForm(saved);
+            statusLabel.setText("Saved payroll for employee #" + employee.getId());
+        } else {
+            showError("Payroll", "Saved payroll but could not read returned payId.");
+        }
     }
 
     private void clearForm() {
@@ -550,62 +560,6 @@ public class EmployeeFxController {
         }
     }
 
-    private String buildFullEmployeePayReport(List<Employee> employees) {
-        StringBuilder sb = new StringBuilder();
-        for (Employee e : employees) {
-            sb.append("Employee #").append(e.getId() == null ? "?" : e.getId())
-                    .append(" - ").append(defaultString(e.getName()))
-                    .append(" | Job: ").append(e.getJobTitle() != null ? e.getJobTitle().getTitle() : "N/A")
-                    .append(" | Division: ").append(e.getDivision() != null ? e.getDivision().getName() : "N/A")
-                    .append(" | Salary: ").append(e.getSalary())
-                    .append(" | Hire Date: ").append(e.getHireDate())
-                    .append("\n");
-            if (e.getPayroll() != null) {
-                var p = e.getPayroll();
-                sb.append("   Payroll ID ").append(p.getPayId())
-                        .append(" | Pay Date: ").append(p.getPayDate())
-                        .append(" | Earnings: ").append(p.getEarnings())
-                        .append(" | State Tax: ").append(p.getStateTax())
-                        .append(" | 401k: ").append(p.getRetire401k())
-                        .append(" | Health: ").append(p.getHealthCare())
-                        .append(" | Fed Tax: ").append(p.getFedTax())
-                        .append(" | Fed Medical: ").append(p.getFedMedical())
-                        .append(" | Fed SS: ").append(p.getFedSocialSecurity())
-                        .append("\n");
-            } else {
-                sb.append("   No payroll data available\n");
-            }
-            sb.append("\n");
-        }
-        return sb.toString();
-    }
-
-    private String buildTotalPayByJobReport(List<Employee> employees) {
-        var totals = new java.util.LinkedHashMap<String, Double>();
-        for (Employee e : employees) {
-            String key = e.getJobTitle() != null ? e.getJobTitle().getTitle() : "Unassigned";
-            totals.put(key, totals.getOrDefault(key, 0.0) + e.getPayForMonthByJob());
-        }
-        StringBuilder sb = new StringBuilder("Total pay for month by job title:\n");
-        totals.forEach((job, total) -> sb.append(" - ").append(job).append(": ").append(total).append("\n"));
-        return sb.toString();
-    }
-
-    private String buildTotalPayByDivisionReport(List<Employee> employees) {
-        var totals = new java.util.LinkedHashMap<String, Double>();
-        for (Employee e : employees) {
-            String key = e.getDivision() != null ? e.getDivision().getName() : "Unassigned";
-            totals.put(key, totals.getOrDefault(key, 0.0) + e.getPayForMonthByDivision());
-        }
-        StringBuilder sb = new StringBuilder("Total pay for month by division:\n");
-        totals.forEach((division, total) -> sb.append(" - ").append(division).append(": ").append(total).append("\n"));
-        return sb.toString();
-    }
-
-    private String defaultString(String value) {
-        return value != null ? value : "";
-    }
-
     private void populatePayrollForm(Payroll payroll) {
         if (payroll == null) {
             payDatePicker.setValue(null);
@@ -672,88 +626,37 @@ public class EmployeeFxController {
     }
 
     private Job ensureJob(String title) {
-        Job existing = fetchJobByTitle(title);
+        Job existing = backendClient.fetchJobByTitle(title);
         if (existing != null) {
             return existing;
         }
-        try {
-            Job request = new Job(null, title);
-            return restTemplate.postForObject(apiBase() + "/jobs", request, Job.class);
-        } catch (RestClientException ex) {
-            showError("Job", "Unable to save job: " + ex.getMessage());
-            return null;
+        Job created = backendClient.createJob(new Job(null, title));
+        if (created == null) {
+            showError("Job", "Unable to save job \"" + title + "\"");
         }
+        return created;
     }
 
     private Division ensureDivision(String name) {
-        Division existing = fetchDivisionByName(name);
+        Division existing = backendClient.fetchDivisionByName(name);
         if (existing != null) {
             return existing;
         }
-        try {
-            Division request = new Division();
-            request.setName(name);
-            return restTemplate.postForObject(apiBase() + "/divisions", request, Division.class);
-        } catch (RestClientException ex) {
-            showError("Division", "Unable to save division: " + ex.getMessage());
-            return null;
+        Division request = new Division();
+        request.setName(name);
+        Division created = backendClient.createDivision(request);
+        if (created == null) {
+            showError("Division", "Unable to save division \"" + name + "\"");
         }
+        return created;
     }
 
     private List<String> fetchJobTitles() {
-        return fetchJobs().stream().map(Job::getTitle).toList();
-    }
-
-    private List<Job> fetchJobs() {
-        try {
-            ResponseEntity<List<Job>> response = restTemplate.exchange(
-                    apiBase() + "/jobs",
-                    HttpMethod.GET,
-                    null,
-                    new ParameterizedTypeReference<>() {});
-            return Optional.ofNullable(response.getBody()).orElseGet(List::of);
-        } catch (RestClientException ex) {
-            statusLabel.setText("Unable to load jobs: " + ex.getMessage());
-            return List.of();
-        }
-    }
-
-    private Job fetchJobByTitle(String title) {
-        try {
-            return restTemplate.getForObject(apiBase() + "/jobs/{title}", Job.class, title);
-        } catch (RestClientException ex) {
-            return null;
-        }
+        return backendClient.fetchJobs().stream().map(Job::getTitle).toList();
     }
 
     private List<String> fetchDivisionNames() {
-        return fetchDivisions().stream().map(Division::getName).toList();
-    }
-
-    private List<Division> fetchDivisions() {
-        try {
-            ResponseEntity<List<Division>> response = restTemplate.exchange(
-                    apiBase() + "/divisions",
-                    HttpMethod.GET,
-                    null,
-                    new ParameterizedTypeReference<>() {});
-            return Optional.ofNullable(response.getBody()).orElseGet(List::of);
-        } catch (RestClientException ex) {
-            statusLabel.setText("Unable to load divisions: " + ex.getMessage());
-            return List.of();
-        }
-    }
-
-    private Division fetchDivisionByName(String name) {
-        try {
-            return restTemplate.getForObject(apiBase() + "/divisions/{name}", Division.class, name);
-        } catch (RestClientException ex) {
-            return null;
-        }
-    }
-
-    private String apiBase() {
-        return "http://localhost:8080";
+        return backendClient.fetchDivisions().stream().map(Division::getName).toList();
     }
 
     private static class FormData {
